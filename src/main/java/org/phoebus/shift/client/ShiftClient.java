@@ -51,9 +51,11 @@ public class ShiftClient {
         }
     }
 
-    /**
-     * Returns the currently active shift for the given type, or null if none is active.
-     */
+    // -------------------------------------------------------------------------
+    // Read operations
+    // -------------------------------------------------------------------------
+
+    /** Returns the currently active shift for the given type, or null if none / 404. */
     public Shift getShift(String type) throws ShiftClientException {
         String body = get("/shift/" + type);
         if (body == null) return null;
@@ -64,9 +66,7 @@ public class ShiftClient {
         }
     }
 
-    /**
-     * Returns all shifts known to the service.
-     */
+    /** Returns all shifts known to the service. */
     public List<Shift> listShifts() throws ShiftClientException {
         String body = get("/shifts");
         if (body == null) return List.of();
@@ -77,9 +77,7 @@ public class ShiftClient {
         }
     }
 
-    /**
-     * Returns all shift types configured in the service.
-     */
+    /** Returns all shift types configured in the service. */
     public List<ShiftType> listTypes() throws ShiftClientException {
         String body = get("/shiftTypes");
         if (body == null) return List.of();
@@ -90,26 +88,111 @@ public class ShiftClient {
         }
     }
 
-    private String get(String path) throws ShiftClientException {
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
-                .timeout(readTimeout)
-                .GET();
+    // -------------------------------------------------------------------------
+    // Write operations
+    // -------------------------------------------------------------------------
 
-        if (authHeader != null) {
-            requestBuilder.header("Authorization", authHeader);
+    /**
+     * Starts a new shift of the given type, owned by the given owner.
+     * Returns the created shift as returned by the service.
+     */
+    public Shift startShift(String type, String owner) throws ShiftClientException {
+        Shift payload = new Shift();
+        ShiftType shiftType = new ShiftType();
+        shiftType.setName(type);
+        payload.setType(shiftType);
+        payload.setOwner(owner);
+
+        String body = post("/shifts", payload);
+        try {
+            return objectMapper.readValue(body, Shift.class);
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to parse start-shift response", e);
         }
+    }
 
+    /**
+     * Ends the shift with the given id.
+     * Returns the updated shift as returned by the service.
+     */
+    public Shift endShift(int shiftId) throws ShiftClientException {
+        String body = put("/shifts/" + shiftId + "/end", null);
+        try {
+            return objectMapper.readValue(body, Shift.class);
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to parse end-shift response for id: " + shiftId, e);
+        }
+    }
+
+    /**
+     * Closes the shift with the given id (final state after ending).
+     * Returns the updated shift as returned by the service.
+     */
+    public Shift closeShift(int shiftId) throws ShiftClientException {
+        String body = put("/shifts/" + shiftId + "/close", null);
+        try {
+            return objectMapper.readValue(body, Shift.class);
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to parse close-shift response for id: " + shiftId, e);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // HTTP helpers
+    // -------------------------------------------------------------------------
+
+    private String get(String path) throws ShiftClientException {
+        HttpRequest request = newRequest(path).GET().build();
+        return send(request, path);
+    }
+
+    private String post(String path, Object body) throws ShiftClientException {
+        try {
+            String json = (body != null) ? objectMapper.writeValueAsString(body) : "";
+            HttpRequest request = newRequest(path)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            return send(request, path);
+        } catch (ShiftClientException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to serialize request body for POST " + path, e);
+        }
+    }
+
+    private String put(String path, Object body) throws ShiftClientException {
+        try {
+            String json = (body != null) ? objectMapper.writeValueAsString(body) : "";
+            HttpRequest request = newRequest(path)
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            return send(request, path);
+        } catch (ShiftClientException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to serialize request body for PUT " + path, e);
+        }
+    }
+
+    private HttpRequest.Builder newRequest(String path) {
+        HttpRequest.Builder b = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(readTimeout);
+        if (authHeader != null) b.header("Authorization", authHeader);
+        return b;
+    }
+
+    private String send(HttpRequest request, String path) throws ShiftClientException {
         try {
             HttpResponse<String> response = httpClient.send(
-                    requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
-
+                    request, HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
-            if (status == 200) return response.body();
+            if (status == 200 || status == 201) return response.body();
             if (status == 404) return null;
             throw new ShiftClientException(
-                    "Shift service returned HTTP " + status + " for GET " + path);
-
+                    "Shift service returned HTTP " + status + " for " + request.method() + " " + path);
         } catch (ShiftClientException e) {
             throw e;
         } catch (Exception e) {
@@ -118,7 +201,7 @@ public class ShiftClient {
         }
     }
 
-    /** Returns the base URL this client is configured with. Useful for tests. */
+    /** Returns the base URL this client is configured with. */
     public String baseUrl() {
         return baseUrl;
     }
@@ -134,33 +217,12 @@ public class ShiftClient {
         private String username;
         private String password = "";
 
-        public Builder baseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
-            return this;
-        }
+        public Builder baseUrl(String baseUrl) { this.baseUrl = baseUrl; return this; }
+        public Builder connectTimeout(Duration timeout) { this.connectTimeout = timeout; return this; }
+        public Builder readTimeout(Duration timeout) { this.readTimeout = timeout; return this; }
+        public Builder username(String username) { this.username = username; return this; }
+        public Builder password(String password) { this.password = password; return this; }
 
-        public Builder connectTimeout(Duration timeout) {
-            this.connectTimeout = timeout;
-            return this;
-        }
-
-        public Builder readTimeout(Duration timeout) {
-            this.readTimeout = timeout;
-            return this;
-        }
-
-        public Builder username(String username) {
-            this.username = username;
-            return this;
-        }
-
-        public Builder password(String password) {
-            this.password = password;
-            return this;
-        }
-
-        public ShiftClient build() {
-            return new ShiftClient(this);
-        }
+        public ShiftClient build() { return new ShiftClient(this); }
     }
 }

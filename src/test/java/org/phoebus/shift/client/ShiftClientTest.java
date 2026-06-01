@@ -128,6 +128,69 @@ class ShiftClientTest {
     }
 
     // -------------------------------------------------------------------------
+    // startShift
+    // -------------------------------------------------------------------------
+
+    @Test
+    void startShift_postsAndReturnsCreatedShift() throws ShiftClientException {
+        stubFor(post("/shifts")
+                .willReturn(aResponse().withStatus(201).withHeader("Content-Type", "application/json")
+                        .withBody("{\"id\":10,\"status\":\"Active\",\"owner\":\"alice\"," +
+                                "\"type\":{\"id\":1,\"name\":\"Operations\"}}")));
+
+        Shift created = client.startShift("Operations", "alice");
+
+        assertNotNull(created);
+        assertEquals(10, created.getId());
+        assertEquals("Active", created.getStatus());
+        assertEquals("alice", created.getOwner());
+        verify(postRequestedFor(urlEqualTo("/shifts"))
+                .withHeader("Content-Type", containing("application/json")));
+    }
+
+    @Test
+    void startShift_serviceError_throwsException() {
+        stubFor(post("/shifts").willReturn(aResponse().withStatus(500)));
+
+        assertThrows(ShiftClientException.class, () -> client.startShift("Operations", "alice"));
+    }
+
+    // -------------------------------------------------------------------------
+    // endShift
+    // -------------------------------------------------------------------------
+
+    @Test
+    void endShift_putsAndReturnsUpdatedShift() throws ShiftClientException {
+        stubFor(put("/shifts/5/end")
+                .willReturn(okJson("{\"id\":5,\"status\":\"Ended\",\"owner\":\"bob\"," +
+                        "\"type\":{\"id\":1,\"name\":\"Operations\"}}")));
+
+        Shift ended = client.endShift(5);
+
+        assertNotNull(ended);
+        assertEquals(5, ended.getId());
+        assertEquals("Ended", ended.getStatus());
+        verify(putRequestedFor(urlEqualTo("/shifts/5/end")));
+    }
+
+    // -------------------------------------------------------------------------
+    // closeShift
+    // -------------------------------------------------------------------------
+
+    @Test
+    void closeShift_putsAndReturnsUpdatedShift() throws ShiftClientException {
+        stubFor(put("/shifts/5/close")
+                .willReturn(okJson("{\"id\":5,\"status\":\"Closed\",\"owner\":\"bob\"," +
+                        "\"type\":{\"id\":1,\"name\":\"Operations\"}}")));
+
+        Shift closed = client.closeShift(5);
+
+        assertNotNull(closed);
+        assertEquals("Closed", closed.getStatus());
+        verify(putRequestedFor(urlEqualTo("/shifts/5/close")));
+    }
+
+    // -------------------------------------------------------------------------
     // Auth
     // -------------------------------------------------------------------------
 
