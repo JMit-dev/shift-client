@@ -66,6 +66,30 @@ public class ShiftClient {
         }
     }
 
+    /**
+     * Searches shifts using optional server-side filters.
+     * Pass null for any parameter to omit it from the query.
+     */
+    public List<Shift> findShifts(String type, String status, String owner,
+                                   java.util.Date from, java.util.Date to) throws ShiftClientException {
+        StringBuilder path = new StringBuilder("/shifts");
+        java.util.List<String> params = new java.util.ArrayList<>();
+        if (type   != null && !type.isEmpty())   params.add("type="   + encode(type));
+        if (status != null && !status.isEmpty()) params.add("status=" + encode(status));
+        if (owner  != null && !owner.isEmpty())  params.add("owner="  + encode(owner));
+        if (from   != null) params.add("from=" + from.getTime());
+        if (to     != null) params.add("to="   + to.getTime());
+        if (!params.isEmpty()) path.append("?").append(String.join("&", params));
+
+        String body = get(path.toString());
+        if (body == null) return List.of();
+        try {
+            return objectMapper.readValue(body, new TypeReference<List<Shift>>() {});
+        } catch (Exception e) {
+            throw new ShiftClientException("Failed to parse findShifts response", e);
+        }
+    }
+
     /** Returns all shifts known to the service. */
     public List<Shift> listShifts() throws ShiftClientException {
         String body = get("/shifts");
@@ -198,6 +222,14 @@ public class ShiftClient {
         } catch (Exception e) {
             throw new ShiftClientException(
                     "Failed to reach shift service at " + baseUrl + path, e);
+        }
+    }
+
+    private static String encode(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return value;
         }
     }
 

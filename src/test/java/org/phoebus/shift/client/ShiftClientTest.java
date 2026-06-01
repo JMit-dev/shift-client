@@ -128,6 +128,60 @@ class ShiftClientTest {
     }
 
     // -------------------------------------------------------------------------
+    // findShifts
+    // -------------------------------------------------------------------------
+
+    @Test
+    void findShifts_withTypeAndStatus_sendsQueryParams() throws ShiftClientException {
+        stubFor(get(urlPathEqualTo("/shifts"))
+                .withQueryParam("type", equalTo("Operations"))
+                .withQueryParam("status", equalTo("Active"))
+                .willReturn(okJson(
+                        "[{\"id\":1,\"status\":\"Active\",\"owner\":\"alice\"," +
+                        "\"type\":{\"id\":1,\"name\":\"Operations\"}}]")));
+
+        List<Shift> results = client.findShifts("Operations", "Active", null, null, null);
+
+        assertEquals(1, results.size());
+        assertEquals("Active", results.get(0).getStatus());
+        verify(getRequestedFor(urlPathEqualTo("/shifts"))
+                .withQueryParam("type", equalTo("Operations"))
+                .withQueryParam("status", equalTo("Active")));
+    }
+
+    @Test
+    void findShifts_withOwner_encodesParam() throws ShiftClientException {
+        stubFor(get(urlPathEqualTo("/shifts"))
+                .withQueryParam("owner", equalTo("john doe"))
+                .willReturn(okJson("[]")));
+
+        List<Shift> results = client.findShifts(null, null, "john doe", null, null);
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    void findShifts_noParams_returnsAllShifts() throws ShiftClientException {
+        stubFor(get(urlPathEqualTo("/shifts"))
+                .willReturn(okJson(
+                        "[{\"id\":1,\"status\":\"Active\",\"owner\":\"alice\"," +
+                        "\"type\":{\"id\":1,\"name\":\"Operations\"}}," +
+                        "{\"id\":2,\"status\":\"Closed\",\"owner\":\"bob\"," +
+                        "\"type\":{\"id\":1,\"name\":\"Operations\"}}]")));
+
+        List<Shift> results = client.findShifts(null, null, null, null, null);
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void findShifts_404_returnsEmptyList() throws ShiftClientException {
+        stubFor(get(urlPathEqualTo("/shifts"))
+                .withQueryParam("type", equalTo("Unknown"))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertTrue(client.findShifts("Unknown", null, null, null, null).isEmpty());
+    }
+
+    // -------------------------------------------------------------------------
     // startShift
     // -------------------------------------------------------------------------
 
