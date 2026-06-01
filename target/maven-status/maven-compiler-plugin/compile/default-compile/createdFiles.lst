@@ -1,0 +1,7 @@
+org/phoebus/shift/client/ShiftClient$2.class
+org/phoebus/shift/client/ShiftClientException.class
+org/phoebus/shift/client/ShiftClient$1.class
+org/phoebus/shift/client/ShiftClient.class
+org/phoebus/shift/client/model/Shift.class
+org/phoebus/shift/client/model/ShiftType.class
+org/phoebus/shift/client/ShiftClient$Builder.class
